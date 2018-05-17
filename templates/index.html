@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>気温・湿度の変化</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="#">気温・湿度の変化</a>
+    <button type="button" class="navbar-toggler" data-toggle="collapse" data-target="#Navber" aria-controls="Navber"
+            aria-expanded="false"
+            aria-label="ナビゲーションの切替">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="Navber">
+        <ul class="navbar-nav mr-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'admin:index' %}">管理サイト</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="{% url 'admin:logout' %}">ログアウト</a>
+            </li>
+        </ul>
+    </div>
+    <!-- /.navbar-collapse -->
+</nav>
+<div class="container">
+    <div class="container">
+        <canvas id="myChart"></canvas>
+    </div>
+    <div class="row mt-3">
+        <div class="col-12">
+            <form>
+                <fieldset class="form-group">
+                    <legend class="text-center">表示期間</legend>
+                    <div class="text-center">
+                        <div class="form-check form-check-inline">
+                            <label class="form-check-label">
+                                <input type="radio" class="form-check-input" name="days" id="term_4"
+                                       value="7">
+                                １週間分
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <label class="form-check-label">
+                                <input type="radio" class="form-check-input" name="days" id="term_3"
+                                       value="3">
+                                ３日分
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <label class="form-check-label">
+                                <input type="radio" class="form-check-input" name="days" id="term_1"
+                                       value="1"
+                                       checked>
+                                １日分
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </form>
+        </div>
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.10.6/moment.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.10.6/locale/ja.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.9.0/underscore-min.js" charset="utf-8"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.min.js" charset="utf-8"></script>
+<script>
+
+    var chart;
+
+    // グラフ描画
+    function drawChart(data) {
+        var ctx = document.getElementById("myChart").getContext('2d');
+
+        if (chart) {
+            chart.destroy();
+        }
+
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+
+                labels: data[0],
+                datasets: [{
+                    label: '気温',
+                    data: data[1],
+                    yAxisID: "y-axis-1",
+                    fill: false,
+                    backgroundColor: 'rgb(255, 99, 132)',
+                    borderColor: 'rgb(255, 99, 132)',
+                }, {
+                    label: '湿度',
+                    data: data[2],
+                    yAxisID: "y-axis-2",
+                    fill: false,
+                    backgroundColor: "rgb(54, 162, 235)",
+                    borderColor: "rgb(54, 162, 235)",
+                },]
+            },
+            options: {
+                scales: {
+                    yAxes: [
+                        {
+                            // 気温軸（左）
+                            id: "y-axis-1",
+                            type: "linear",
+                            position: "left",
+                            ticks: {
+                                max: 50,
+                                min: -30,
+                                stepSize: 10
+                            },
+                        }, {
+                            // 湿度軸（右）
+                            id: "y-axis-2",
+                            type: "linear",
+                            position: "right",
+                            ticks: {
+                                max: 100,
+                                min: 0,
+                                stepSize: 25
+                            },
+                        }],
+                    xAxes: [{
+                        type: 'time',
+                        time: {
+                            displayFormats: {
+                                hour: 'D日H時'
+                            }
+                        }
+                    }]
+                },
+                tooltips: {
+                    callbacks: {
+                        title: function (tooltipItem, data) {
+                            return moment(tooltipItem[0].xLabel).format('YYYY-MM-DD HH:mm')
+                        }
+                    }
+                }
+            }
+        })
+    }
+
+    // データ読込
+    function reload() {
+
+        // 指定時間を取得
+        var days = $('input[name=days]:checked').val();
+        // 1日、３日、７日前の時間を設定
+        var param = moment().subtract(days, 'days').format('YYYY-MM-DD HH:mm:ss')
+
+        $.getJSON('/api/logs?created_at__gte=' + param)
+            .done(function (source) {
+                let data = new Array(3);
+                data[0] = _.pluck(source, 'created_at');
+                data[1] = _.pluck(source, 'temperature');
+                data[2] = _.pluck(source, 'humidity');
+                drawChart(data);
+            })
+    };
+
+    $(document).ready(function () {
+        // ラジオボタンのイベントリスナー
+        $('input[name="days"]:radio').on('change', function () {
+            reload();
+        });
+        // 初期化
+        reload();
+    });
+
+</script>
+</body>
+</html>
